@@ -1,17 +1,10 @@
-## Foundry
+## Gnosis gas futures
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Background doc: https://hackmd.io/@dapplion/gnosis_gas_futures
 
-Foundry consists of:
-
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
-
-## Documentation
-
-https://book.getfoundry.sh/
+Extend the network fee collector to allow the network to sell gas futures. This repo explores two approaches:
+- Periodic dutch auctions to sell an NFT to gives right to a specific daily quota for a range of days. Every month 10 auctions are hold at 1:10 months lookahead.
+- Purchase gas units as a fungible ERC-20 which can redeemed forever. There's an additive eip-1559 fee mechanism that targets to sell 10% of the block limit every block.
 
 ## Usage
 
