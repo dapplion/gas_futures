@@ -5,10 +5,14 @@ import {Test, console} from "forge-std/Test.sol";
 import "forge-std/console.sol";
 import "../src/FuturesGasPaymaster.sol";
 import "account-abstraction/core/Entrypoint.sol";
+import "account-abstraction/core/UserOperationLib.sol";
 import "account-abstraction/interfaces/PackedUserOperation.sol";
 import "account-abstraction/samples/SimpleAccountFactory.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract FuturesGasPaymasterTest is Test {
+    using UserOperationLib for PackedUserOperation;
+
     FuturesGasPaymaster public paymaster;
     EntryPoint public entrypoint;
     SimpleAccountFactory public account_factory;
@@ -62,15 +66,6 @@ contract FuturesGasPaymasterTest is Test {
 
         address bundler_addr = address(1002);
 
-         // hard-code default at 100k. should add "create2" cost
-        uint128 verificationGasLimit = 200000;
-        // estimating call to account, and add rough entryPoint overhead
-        uint128 callGasLimit = 55000; 
-        // TODO
-        uint128 maxPriorityFeePerGas = 0; 
-         // TODO
-        uint128 maxFeePerGas = uint128(block.basefee);
-
         // Stack too deep fix, from https://ethereum.stackexchange.com/questions/19587/how-to-fix-stack-too-deep-error
         bytes memory paymasterAndData;
         {
@@ -87,25 +82,66 @@ contract FuturesGasPaymasterTest is Test {
         address payable beneficiary = payable(bundler_addr);
 
 
-        bytes32 messageHash = keccak256("test");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivKey, messageHash);
+        PackedUserOperation memory userOp;
+        {
+            // hard-code default at 100k. should add "create2" cost
+            uint128 verificationGasLimit = 200000;
+            // estimating call to account, and add rough entryPoint overhead
+            uint128 callGasLimit = 55000; 
+            // TODO
+            uint128 maxPriorityFeePerGas = 0; 
+            // TODO
+            uint128 maxFeePerGas = uint128(block.basefee);
 
-        // Now prepare a user operation and send it to the entrypoint
-        PackedUserOperation memory op = PackedUserOperation({
-            sender: userAddress,
-            nonce: 0,
-            initCode: hex"", // no need for init code as the account should already be deployed
-            callData: hex"fff612",
-            accountGasLimits: bytes32(abi.encodePacked(verificationGasLimit, callGasLimit)),
-            preVerificationGas: 0,
-            gasFees: bytes32(abi.encodePacked(maxPriorityFeePerGas, maxFeePerGas)),
-            paymasterAndData: paymasterAndData,
-            signature: abi.encode(v, r, s)
-        });
+            // Now prepare a user operation and send it to the entrypoint
+            // must be calldata to have access to the UserOperationLib functions
+            userOp = PackedUserOperation({
+                sender: address(userSCAddr),
+                nonce: 0,
+                initCode: hex"", // no need for init code as the account should already be deployed
+                callData: hex"fff612",
+                accountGasLimits: bytes32(abi.encodePacked(verificationGasLimit, callGasLimit)),
+                preVerificationGas: 0,
+                gasFees: bytes32(abi.encodePacked(maxPriorityFeePerGas, maxFeePerGas)),
+                paymasterAndData: paymasterAndData,
+                signature: hex"" // set to blank to compute the hash
+            });
+        }
 
-        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
-        ops[0] = op;
-        entrypoint.handleOps(ops, beneficiary);
+        {
+            bytes32 userOpHashInner = getUserOpHash(userOp); 
+            // Using console.log this `userOpHash` is correct, and matches the one passed to validateUserOp
+            bytes32 userOpHash = keccak256(abi.encode(userOpHashInner, address(entrypoint), block.chainid));
+            bytes32 hash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivKey, hash);
+
+            // R
+            userOp.signature = abi.encodePacked(v, r, s);
+        }
+
+        PackedUserOperation[] memory userOps = new PackedUserOperation[](1);
+        userOps[0] = userOp;
+        entrypoint.handleOps(userOps, beneficiary);
+    }
+
+    function getUserOpHash(PackedUserOperation memory userOp) internal returns (bytes32) {
+        address sender = userOp.sender;
+        uint256 nonce = userOp.nonce;
+        bytes32 hashInitCode = keccak256(userOp.initCode);
+        bytes32 hashCallData = keccak256(userOp.callData);
+        bytes32 accountGasLimits = userOp.accountGasLimits;
+        uint256 preVerificationGas = userOp.preVerificationGas;
+        bytes32 gasFees = userOp.gasFees;
+        bytes32 hashPaymasterAndData = keccak256(userOp.paymasterAndData);
+
+        bytes memory encoded = abi.encode(
+            sender, nonce,
+            hashInitCode, hashCallData,
+            accountGasLimits, preVerificationGas, gasFees,
+            hashPaymasterAndData
+        );
+
+        return keccak256(encoded);
     }
 
     /// Prepare init code for account
