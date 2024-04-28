@@ -5,7 +5,7 @@ import "account-abstraction/core/BasePaymaster.sol";
 import "account-abstraction/core/UserOperationLib.sol";
 import "account-abstraction/core/Helpers.sol";
 
-contract FuturesGasPaymaster is BasePaymaster {
+contract FuturesGasNFTPaymaster is BasePaymaster {
     using UserOperationLib for PackedUserOperation;
 
     struct PaymasterConfig {

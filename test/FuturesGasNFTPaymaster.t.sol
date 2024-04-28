@@ -3,17 +3,17 @@ pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
 import "forge-std/console.sol";
-import "../src/FuturesGasPaymaster.sol";
+import "../src/FuturesGasNFTPaymaster.sol";
 import "account-abstraction/core/Entrypoint.sol";
 import "account-abstraction/core/UserOperationLib.sol";
 import "account-abstraction/interfaces/PackedUserOperation.sol";
 import "account-abstraction/samples/SimpleAccountFactory.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 
-contract FuturesGasPaymasterTest is Test {
+contract FuturesGasNFTPaymasterTest is Test {
     using UserOperationLib for PackedUserOperation;
 
-    FuturesGasPaymaster public paymaster;
+    FuturesGasNFTPaymaster public paymaster;
     EntryPoint public entrypoint;
     SimpleAccountFactory public account_factory;
     address public paymaster_owner;
@@ -21,14 +21,14 @@ contract FuturesGasPaymasterTest is Test {
     function setUp() public {
         entrypoint = new EntryPoint();
 
-        FuturesGasPaymaster.PaymasterConfig memory tokenPaymasterConfig = FuturesGasPaymaster.PaymasterConfig({
+        FuturesGasNFTPaymaster.PaymasterConfig memory tokenPaymasterConfig = FuturesGasNFTPaymaster.PaymasterConfig({
             entryPointBalanceLowWaterMark: 0,
             entryPointBalanceHighWaterMark: 0,
             refundPostopCost: 0,
             maxBlockGas: 30000000
         });
         paymaster_owner = address(1001);
-        paymaster = new FuturesGasPaymaster(entrypoint, tokenPaymasterConfig, paymaster_owner);
+        paymaster = new FuturesGasNFTPaymaster(entrypoint, tokenPaymasterConfig, paymaster_owner);
 
         account_factory = new SimpleAccountFactory(entrypoint);
     }
@@ -50,7 +50,7 @@ contract FuturesGasPaymasterTest is Test {
         {
             vm.warp(1700000000);
             uint32 dayNumber = uint32(block.timestamp / 1 days);
-            FuturesGasPaymaster.GasQuota memory gasQuota = FuturesGasPaymaster.GasQuota({
+            FuturesGasNFTPaymaster.GasQuota memory gasQuota = FuturesGasNFTPaymaster.GasQuota({
                 owner: address(userSCAddr),
                 validFromDayNumber: dayNumber,
                 validToDayNumber: dayNumber + 1,
