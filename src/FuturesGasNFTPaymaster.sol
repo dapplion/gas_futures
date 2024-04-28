@@ -4,8 +4,9 @@ pragma solidity ^0.8.13;
 import "account-abstraction/core/BasePaymaster.sol";
 import "account-abstraction/core/UserOperationLib.sol";
 import "account-abstraction/core/Helpers.sol";
+import "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 
-contract FuturesGasNFTPaymaster is BasePaymaster {
+contract FuturesGasNFTPaymaster is BasePaymaster, ERC721 {
     using UserOperationLib for PackedUserOperation;
 
     struct PaymasterConfig {
@@ -25,7 +26,6 @@ contract FuturesGasNFTPaymaster is BasePaymaster {
     }
 
     struct GasQuota {
-        address owner;
         uint32 validFromDayNumber;
         uint32 validToDayNumber;
         /// Day number of usedGas
@@ -47,6 +47,7 @@ contract FuturesGasNFTPaymaster is BasePaymaster {
 
     constructor(IEntryPoint _entryPoint, PaymasterConfig memory _tokenPaymasterConfig, address _owner)
         BasePaymaster(_entryPoint)
+        ERC721("Gnosis Gas Futures", "GGF")
     {
         nextTokenId = 0;
         setConfig(_tokenPaymasterConfig);
@@ -67,12 +68,13 @@ contract FuturesGasNFTPaymaster is BasePaymaster {
     /// @notice Mints a new gas quota
     /// @param _gasQuota The GasQuota struct representing the quota details
     /// @return tokenId The ID of the newly minted token
-    function mintGasQuota(GasQuota memory _gasQuota) public onlyOwner returns (uint256) {
+    function mintGasQuota(GasQuota memory _gasQuota, address to) public onlyOwner returns (uint256) {
         require(_gasQuota.validFromDayNumber <= _gasQuota.validToDayNumber, "TPM: bad quota");
         require(_gasQuota.dayNumber == 0, "TPM: bad quota");
         require(_gasQuota.usedGas == 0, "TPM: bad quota");
         uint256 tokenId = nextTokenId;
         nextTokenId += 1;
+        _safeMint(to, tokenId);
         gasQuotas[tokenId] = _gasQuota;
         return tokenId;
     }
@@ -111,11 +113,11 @@ contract FuturesGasNFTPaymaster is BasePaymaster {
             uint256 tokenId =
                 uint256(bytes32(userOp.paymasterAndData[PAYMASTER_DATA_OFFSET:PAYMASTER_DATA_OFFSET + 32]));
             require(tokenId < nextTokenId, "TPM: unknown tokenId");
+            require(ownerOf(tokenId) == userOp.sender, "TPM: not token owner");
 
             GasQuota memory gasQuota = gasQuotas[tokenId];
             {
                 // Assert user gas limits
-                require(gasQuota.owner == userOp.sender, "TPM: not token owner");
                 uint32 dayNumber = uint32(block.timestamp / 1 days);
                 if (gasQuota.dayNumber < dayNumber) {
                     gasQuota.dayNumber = dayNumber;

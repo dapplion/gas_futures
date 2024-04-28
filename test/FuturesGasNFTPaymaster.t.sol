@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {Test, console} from "forge-std/Test.sol";
 import "forge-std/console.sol";
 import "../src/FuturesGasNFTPaymaster.sol";
-import "account-abstraction/core/Entrypoint.sol";
+import "account-abstraction/core/EntryPoint.sol";
 import "account-abstraction/core/UserOperationLib.sol";
 import "account-abstraction/interfaces/PackedUserOperation.sol";
 import "account-abstraction/samples/SimpleAccountFactory.sol";
@@ -51,7 +51,6 @@ contract FuturesGasNFTPaymasterTest is Test {
             vm.warp(1700000000);
             uint32 dayNumber = uint32(block.timestamp / 1 days);
             FuturesGasNFTPaymaster.GasQuota memory gasQuota = FuturesGasNFTPaymaster.GasQuota({
-                owner: address(userSCAddr),
                 validFromDayNumber: dayNumber,
                 validToDayNumber: dayNumber + 1,
                 dayNumber: 0,
@@ -61,7 +60,7 @@ contract FuturesGasNFTPaymasterTest is Test {
 
             assertEq(paymaster.owner(), paymaster_owner);
             vm.prank(paymaster_owner);
-            tokenId = paymaster.mintGasQuota(gasQuota);
+            tokenId = paymaster.mintGasQuota(gasQuota, address(userSCAddr));
         }
 
 

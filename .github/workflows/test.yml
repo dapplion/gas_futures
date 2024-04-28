@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: true
 
-    name: Foundry project
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +23,9 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+
+      - name: Install deps
+        run: forge install
 
       - name: Run Forge build
         run: |
