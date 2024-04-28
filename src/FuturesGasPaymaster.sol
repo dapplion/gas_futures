@@ -48,7 +48,7 @@ contract FuturesGasPaymaster is BasePaymaster {
     constructor(IEntryPoint _entryPoint, PaymasterConfig memory _tokenPaymasterConfig, address _owner)
         BasePaymaster(_entryPoint)
     {
-        nextTokenId = 1;
+        nextTokenId = 0;
         setConfig(_tokenPaymasterConfig);
         transferOwnership(_owner);
     }
@@ -65,13 +65,16 @@ contract FuturesGasPaymaster is BasePaymaster {
     }
 
     /// @notice Mints a new gas quota
-    function mintGasQuota(GasQuota memory _gasQuota) public onlyOwner {
+    /// @param _gasQuota The GasQuota struct representing the quota details
+    /// @return tokenId The ID of the newly minted token
+    function mintGasQuota(GasQuota memory _gasQuota) public onlyOwner returns (uint256) {
         require(_gasQuota.validFromDayNumber <= _gasQuota.validToDayNumber, "TPM: bad quota");
         require(_gasQuota.dayNumber == 0, "TPM: bad quota");
         require(_gasQuota.usedGas == 0, "TPM: bad quota");
         uint256 tokenId = nextTokenId;
         nextTokenId += 1;
         gasQuotas[tokenId] = _gasQuota;
+        return tokenId;
     }
 
     /// @notice Validates a paymaster user operation and calculates the required token amount for the transaction.
@@ -86,7 +89,7 @@ contract FuturesGasPaymaster is BasePaymaster {
     {
         unchecked {
             uint256 dataLength = userOp.paymasterAndData.length - PAYMASTER_DATA_OFFSET;
-            require(dataLength == 0 || dataLength == 32, "TPM: invalid data length");
+            require(dataLength == 32, "TPM: invalid data length");
             uint256 maxFeePerGas = userOp.unpackMaxFeePerGas();
             uint256 refundPostopCost = tokenPaymasterConfig.refundPostopCost;
             require(refundPostopCost < userOp.unpackPostOpGasLimit(), "TPM: postOpGasLimit too low");
@@ -107,10 +110,12 @@ contract FuturesGasPaymaster is BasePaymaster {
             // Retrieve the selected tokenId to sponsor this userAction
             uint256 tokenId =
                 uint256(bytes32(userOp.paymasterAndData[PAYMASTER_DATA_OFFSET:PAYMASTER_DATA_OFFSET + 32]));
+            require(tokenId < nextTokenId, "TPM: unknown tokenId");
 
-            // Assert user gas limits
             GasQuota memory gasQuota = gasQuotas[tokenId];
             {
+                // Assert user gas limits
+                require(gasQuota.owner == userOp.sender, "TPM: not token owner");
                 uint32 dayNumber = uint32(block.timestamp / 1 days);
                 if (gasQuota.dayNumber < dayNumber) {
                     gasQuota.dayNumber = dayNumber;
@@ -120,8 +125,8 @@ contract FuturesGasPaymaster is BasePaymaster {
                 gasQuota.usedGas += preCharge;
             }
             // Assert user time validity
-            uint48 validUntil = gasQuota.validFromDayNumber * 1 days;
-            uint48 validAfter = gasQuota.validToDayNumber * 1 days;
+            uint48 validUntil = gasQuota.validToDayNumber * 1 days;
+            uint48 validAfter = gasQuota.validFromDayNumber * 1 days;
 
             context = abi.encode(preCharge, tokenId, userOp.sender);
             validationResult = _packValidationData(false, validUntil, validAfter);

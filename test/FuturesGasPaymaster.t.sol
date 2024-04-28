@@ -45,14 +45,15 @@ contract FuturesGasPaymasterTest is Test {
         // Create a new simple account for user
         SimpleAccount userSCAddr = account_factory.createAccount(userAddress, 0);
 
-
         // Mint new gas quota for user
+        uint256 tokenId;
         {
+            vm.warp(1700000000);
             uint32 dayNumber = uint32(block.timestamp / 1 days);
             FuturesGasPaymaster.GasQuota memory gasQuota = FuturesGasPaymaster.GasQuota({
-                owner: userAddress,
+                owner: address(userSCAddr),
                 validFromDayNumber: dayNumber,
-                validToDayNumber: dayNumber,
+                validToDayNumber: dayNumber + 1,
                 dayNumber: 0,
                 maxDailyGas: 1000000,
                 usedGas: 0
@@ -60,7 +61,7 @@ contract FuturesGasPaymasterTest is Test {
 
             assertEq(paymaster.owner(), paymaster_owner);
             vm.prank(paymaster_owner);
-            paymaster.mintGasQuota(gasQuota);
+            tokenId = paymaster.mintGasQuota(gasQuota);
         }
 
 
@@ -72,9 +73,9 @@ contract FuturesGasPaymasterTest is Test {
             // Default from eth-infinitism/account-abstraction
             uint128 paymasterVerificationGasLimit = 300000; 
             // TODO
-            uint128 paymasterPostOpGasLimit = 0;
+            uint128 paymasterPostOpGasLimit = 100000;
             // TODO
-            bytes memory paymasterData = bytes("0x");
+            bytes memory paymasterData = abi.encodePacked(tokenId);
             paymasterAndData = abi.encodePacked(address(paymaster), paymasterVerificationGasLimit, paymasterPostOpGasLimit, paymasterData);
         }
 
@@ -114,9 +115,7 @@ contract FuturesGasPaymasterTest is Test {
             bytes32 userOpHash = keccak256(abi.encode(userOpHashInner, address(entrypoint), block.chainid));
             bytes32 hash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivKey, hash);
-
-            // R
-            userOp.signature = abi.encodePacked(v, r, s);
+            userOp.signature = abi.encodePacked(r, s, v);
         }
 
         PackedUserOperation[] memory userOps = new PackedUserOperation[](1);
@@ -124,6 +123,8 @@ contract FuturesGasPaymasterTest is Test {
         entrypoint.handleOps(userOps, beneficiary);
     }
 
+    // Copied from upstream, to change data location to `memory`. Calldata can't be mutated.
+    // https://github.com/eth-infinitism/account-abstraction/blob/2b1aac46a8b532121dab4af739bcb019f8693ae1/contracts/core/UserOperationLib.sol#L54
     function getUserOpHash(PackedUserOperation memory userOp) internal returns (bytes32) {
         address sender = userOp.sender;
         uint256 nonce = userOp.nonce;
